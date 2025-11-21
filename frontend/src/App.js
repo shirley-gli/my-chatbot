@@ -1,6 +1,6 @@
 import "./App.css";
 import { useEffect, useState } from "react";
-import { FaHome, FaComments, FaStar, FaChartBar, FaCog, FaUser, FaPlus, FaTrash } from "react-icons/fa";
+import { FaPlus, FaTrash } from "react-icons/fa";
 
 const API_BASE = "http://127.0.0.1:5000";
 
@@ -33,7 +33,6 @@ function App() {
   }, [chats, activeChatId]);
 
   useEffect(() => {
-    // ensure active chat exists
     if (activeChatId && !chats.find(c => c.id === activeChatId)) {
       setActiveChatId(chats.length ? chats[0].id : null);
     }
@@ -69,7 +68,7 @@ function App() {
   const sendMessage = async () => {
     if (!input.trim()) return;
     let chatId = activeChatId;
-    // if no active chat, create one
+
     if (!chatId) {
       chatId = generateId();
       const baseChat = { id: chatId, title: "New Chat", createdAt: Date.now(), messages: [] };
@@ -80,7 +79,6 @@ function App() {
     const userMsg = { role: "user", text: input, ts: Date.now() };
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...c.messages, userMsg] } : c));
 
-    // if this is the first user message in the chat, try to generate title via backend
     const currentChat = (chats.find(c => c.id === chatId) || { messages: [] });
     const isFirstUserMessage = (currentChat.messages || []).filter(m => m.role === "user").length === 0;
 
@@ -95,13 +93,11 @@ function App() {
         const title = data.title || input.split(".")[0].slice(0, 30);
         setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
       } catch (err) {
-        // fallback: short truncated title
         const fallbackTitle = input.split(".")[0].split(" ").slice(0,6).join(" ");
         setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: fallbackTitle } : c));
       }
     }
 
-    // Ask vector endpoint first (if you want PDFs). If that fails or returns no answer, fallback to /chat.
     const userQuery = input;
     setInput("");
 
@@ -113,12 +109,13 @@ function App() {
       });
       const askData = await askResp.json();
       const answer = askData.answer || askData.error || null;
+
       if (answer) {
         const botMsg = { role: "bot", text: answer, ts: Date.now() };
         setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...c.messages, botMsg] } : c));
         return;
       }
-      // else fallback to /chat
+
       throw new Error("No answer from /ask");
     } catch (err) {
       try {
@@ -138,22 +135,14 @@ function App() {
     }
   };
 
-  const handleKeyPress = (e) => { if (e.key === "Enter") sendMessage(); };
+  const handleKeyPress = (e) => { 
+    if (e.key === "Enter") sendMessage(); 
+  };
 
   const filteredChats = chats.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="main-container">
-
-      {/* LEFT SIDEBAR */}
-      <div className="sidebar">
-        <div className="icon active"><FaHome size={18} color="white" /></div>
-        <div className="icon"><FaComments size={18} color="white" /></div>
-        <div className="icon"><FaStar size={18} color="white" /></div>
-        <div className="icon"><FaChartBar size={18} color="white" /></div>
-        <div className="icon"><FaCog size={18} color="white" /></div>
-        <div className="profile-icon"><FaUser size={20} color="white" /></div>
-      </div>
 
       {/* CHAT LIST PANEL */}
       <div className="chat-list-panel">
@@ -165,16 +154,18 @@ function App() {
         <div className="chat-list">
           {filteredChats.length === 0 && <div className="empty-note">No chats yet — click + to start</div>}
           {filteredChats.map(chat => (
-            <div key={chat.id}
-                 className={`chat-item ${chat.id === activeChatId ? "selected" : ""}`}
-                 onClick={() => setActiveChatId(chat.id)}>
+            <div
+              key={chat.id}
+              className={`chat-item ${chat.id === activeChatId ? "selected" : ""}`}
+              onClick={() => setActiveChatId(chat.id)}
+            >
               <div className="chat-item-left">
                 <div className="chat-title">{chat.title}</div>
                 <div className="chat-sub">{new Date(chat.createdAt).toLocaleString()}</div>
               </div>
               <div className="chat-actions">
                 <button className="small" onClick={(e)=>{e.stopPropagation(); renameChat(chat.id);}}>Rename</button>
-                <button className="small" onClick={(e)=>{e.stopPropagation(); deleteChat(chat.id);}} title="Delete"><FaTrash /></button>
+                <button className="small" onClick={(e)=>{e.stopPropagation(); deleteChat(chat.id);}}><FaTrash /></button>
               </div>
             </div>
           ))}
@@ -183,8 +174,9 @@ function App() {
 
       {/* CHAT WINDOW */}
       <div className="chat-window">
+        <div className="chat-title-banner">PharmaSuite Chatbot</div>
         <div className="chat-header">{activeChat ? activeChat.title : "ChatBot"}</div>
-
+        
         <div className="messages-box">
           {!activeChat && <div className="empty-state">Select a chat or start a new one.</div>}
           {activeChat && activeChat.messages.length === 0 && <div className="empty-state">No messages yet. Say hi 👋</div>}
@@ -205,7 +197,6 @@ function App() {
             onKeyDown={handleKeyPress}
           />
 
-          {/* Hidden file input */}
           <input
             type="file"
             multiple
@@ -216,10 +207,10 @@ function App() {
               if (!selectedFiles.length) return;
               const formData = new FormData();
               for (let i = 0; i < selectedFiles.length; i++) formData.append("files", selectedFiles[i]);
+
               try {
                 const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
                 const data = await res.json();
-                // append upload result to active chat
                 const msg = { role: "bot", text: data.message || "Uploaded", ts: Date.now() };
                 if (!activeChatId) createNewChat();
                 setChats(prev => prev.map(c => c.id === (activeChatId || prev[0].id) ? { ...c, messages: [...c.messages, msg] } : c));
@@ -227,14 +218,12 @@ function App() {
                 const msg = { role: "bot", text: "Upload failed", ts: Date.now() };
                 setChats(prev => prev.map(c => c.id === (activeChatId || prev[0].id) ? { ...c, messages: [...c.messages, msg] } : c));
               }
+
               e.target.value = null;
             }}
           />
 
-          {/* Attachment button */}
-          <button className="attach-btn" onClick={() => document.getElementById("file-upload").click()}>📎</button>
-
-          {/* Send button */}
+          <button className="attach-btn" onClick={() => document.getElementById("file-upload").click()}>➕</button>
           <button className="send-btn" onClick={sendMessage}>➤</button>
         </div>
       </div>
